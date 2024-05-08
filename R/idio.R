@@ -55,7 +55,7 @@ fnets.var <- function(x,
   p <- dim(x)[1]
   n <- dim(x)[2]
 
-  if(!is.null(lambda)) lambda <- max(0, tol)
+  # if(!is.null(lambda)) lambda <- max(0, tol)
   if(!is.null(n.iter)) n.iter <- posint(n.iter)
   tol <- max(0, tol)
   n.cores <- posint(n.cores)
@@ -63,6 +63,7 @@ fnets.var <- function(x,
 
   method <- match.arg(method, c("lasso", "ds"))
   tuning <- match.arg(tuning.args$tuning, c("cv", "bic"))
+  if(!is.null(lambda)) tuning.args$path.length = 1
 
   args <- as.list(environment())
   args$x <- t(args$x)
@@ -142,6 +143,8 @@ fnets.var.internal <- function(xx,
     )
   }
 
+  if(!is.null(lambda)) icv$lambda = lambda
+
   mg <- make.gg(acv$Gamma_i, icv$order.min)
   gg <- mg$gg
   GG <- mg$GG
@@ -182,7 +185,7 @@ var.lasso <-
            symmetric = "min",
            n.iter = 100,
            tol = 0) {
-    backtracking <- TRUE
+    backtracking <- F
     p <- ncol(gg)
     d <- nrow(gg) / ncol(gg)
 
@@ -326,19 +329,17 @@ yw.cv <- function(xx,
   dimnames(cv.err.mat)[[1]] <- lambda.path
   dimnames(cv.err.mat)[[2]] <- var.order
   ind.list <- split(1:n, ceiling(n.folds * (1:n) / n))
-
   for (fold in 1:n.folds) {
     train.ind <- 1:ceiling(length(ind.list[[fold]]) * .5)
     train.x <- xx[, ind.list[[fold]][train.ind]]
     test.x <- xx[, ind.list[[fold]][-train.ind]]
     if(fm.restricted){
-      train.acv <- static.pca(train.x, q = q, mm = max(var.order))$acv$Gamma_i
-      test.acv <- static.pca(test.x, q = q, mm = max(var.order))$acv$Gamma_i
+      train.acv <- static.pca(train.x, q = q, mm = var.order+1)$acv$Gamma_i
+      test.acv <- static.pca(test.x, q = q, mm = var.order+1)$acv$Gamma_i
     } else{
       train.acv <- dyn.pca(train.x, q = q, kern.bw = kern.bw, mm = max(var.order))$acv$Gamma_i
       test.acv <- dyn.pca(test.x, q = q, kern.bw = kern.bw, mm = max(var.order))$acv$Gamma_i
     }
-
     for (jj in 1:length(var.order)) {
       mg <- make.gg(train.acv, var.order[jj])
       gg <- mg$gg
@@ -367,7 +368,6 @@ yw.cv <- function(xx,
     min(lambda.path[apply(cv.err.mat, 1, min) == min(apply(cv.err.mat, 1, min))])
   order.min <-
     min(var.order[apply(cv.err.mat, 2, min) == min(apply(cv.err.mat, 2, min))])
-
   out <-
     list(
       lambda = lambda.min,

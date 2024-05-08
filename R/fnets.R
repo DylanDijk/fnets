@@ -99,6 +99,7 @@ fnets <-
            ),
            var.order = 1,
            var.method = c("lasso", "ds"),
+           lambda = NULL,
            var.args = list(
              n.iter = NULL,
              n.cores = 1
@@ -161,8 +162,8 @@ fnets <-
   acv <- fm$acv
 
   ## idio estimation
-  ive <- fnets.var.internal(xx, acv, method = c("lasso", "ds"),
-                            lambda = NULL,
+  ive <- fnets.var.internal(xx, acv, method = var.method,
+                            lambda = lambda,
                             var.order = var.order,
                             tuning.args = tuning.args,
                             do.threshold = do.threshold,
