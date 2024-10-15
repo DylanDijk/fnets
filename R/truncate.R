@@ -38,7 +38,7 @@ truncateAndComputeCovariance_lag <- function(data, tau, lag = 0) {
 #'  by the \code{lag} argument, is used.
 #' @param standardise boolean; whether to scale up the truncation parameter for each series by the MAD of the corresponding series.
 #' @export
-cv_trunc = function(data, n_tau = 60, lag = 0, cv_lag = 0, standardise = TRUE){
+cv_trunc = function(data, n_tau = 60, lag = 0, cv_lag = 0, standardise = TRUE, plot_cv = FALSE, true_cov){
 
   data = as.matrix(data)
 
@@ -48,6 +48,11 @@ cv_trunc = function(data, n_tau = 60, lag = 0, cv_lag = 0, standardise = TRUE){
     tau_scores = cross_val_lag(data, n_tau, lag = cv_lag, standardise = standardise)
   }
   min_tau = as.numeric(names(which.min(tau_scores[[1]])))
+
+  if(plot_cv){
+    plot(tau_scores[[1]], xaxt = "n", xlab = "Tau" , ylab= "CV error")
+    axis(1, at = which.min(tau_scores[[1]]), labels = round(min_tau,2))
+  }
 
   if(standardise){
     mad_data = mad_variables(data)
