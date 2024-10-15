@@ -43,15 +43,24 @@ cv_trunc = function(data, n_tau = 60, lag = 0, cv_lag = 0, standardise = TRUE, p
   data = as.matrix(data)
 
   if(cv_lag==0){
-    tau_scores = cross_val(data, n_tau, lag, standardise = standardise)
+    tau_scores = cross_val(data, n_tau, lag, standardise = standardise, true_cov = true_cov)
   }else{
     tau_scores = cross_val_lag(data, n_tau, lag = cv_lag, standardise = standardise)
   }
   min_tau = as.numeric(names(which.min(tau_scores[[1]])))
 
   if(plot_cv){
-    plot(tau_scores[[1]], xaxt = "n", xlab = "Tau" , ylab= "CV error")
-    axis(1, at = which.min(tau_scores[[1]]), labels = round(min_tau,2))
+    if(!is.null(true_cov)){
+      par(mfrow = c(1, 2))
+      plot(tau_scores[[1]], xaxt = "n", xlab = "Tau" , ylab= "CV error")
+      axis(1, at = which.min(tau_scores[[1]]), labels = round(min_tau,2))
+      min_true = as.numeric(names(tau_scores[[1]])[which.min(tau_scores[[3]])])
+      plot(tau_scores[[3]], xaxt = "n", xlab = "Tau" , ylab= "True error")
+      axis(1, at = which.min(tau_scores[[3]]), labels = round(min_true,2))
+    } else {
+      plot(tau_scores[[1]], xaxt = "n", xlab = "Tau" , ylab= "CV error")
+      axis(1, at = which.min(tau_scores[[3]]), labels = round(min_true,2))
+    }
   }
 
   if(standardise){
@@ -72,7 +81,7 @@ cv_trunc = function(data, n_tau = 60, lag = 0, cv_lag = 0, standardise = TRUE, p
 
 #' @title internal function that carries out cross validation to choose tuning parameter for data truncation
 #' @keywords internal
-cross_val = function(data, n_tau = 60, lag, standardise = TRUE){
+cross_val = function(data, n_tau = 60, lag, standardise = TRUE, true_cov = NULL){
   # get tau grid, standardised or not
   tau_l = tau_grid_stand_fun(data = data, n_steps = n_tau, standardise = standardise)
 
@@ -95,7 +104,15 @@ cross_val = function(data, n_tau = 60, lag, standardise = TRUE){
   scores_per_tau = 1/2 * (unlist(half_1_trunc_err) + unlist(half_2_trunc_err))
   names(scores_per_tau) = tau_l$tau_values[[1]]
 
-  return(list(scores_per_tau, tau_l$tau_values[[2]]))
+  out = list(scores_per_tau, tau_l$tau_values[[2]])
+  # browser()
+  if(!is.null(true_cov)){
+    data_trunc_cov = plyr::alply(tau_l$tau_grid, 1, truncateAndComputeCovariance_lag, data = data, lag = lag)
+    data_trunc_cov_true_error = lapply(half_1_trunc, function(x){norm((x - true_cov), "M")})
+    out = append(out, list(true_errors  = unlist(data_trunc_cov_true_error)))
+  }
+
+  return(out)
 
 }
 
