@@ -783,7 +783,9 @@ fnets.glmnet = function(xx,
                         var.order = 1,
                         tuning.args = list(
                           tuning = c("cv", "bic"),
-                          n.folds = 1,
+                          cv.method = c("standard", "rolling"),
+                          n.folds = 10,
+                          n.blocks = 5,
                           penalty = NULL,
                           path.length = 10
                         ),
@@ -792,6 +794,11 @@ fnets.glmnet = function(xx,
 
   n <- dim(xx)[1]
   p <- dim(xx)[2]
+
+  cv.method <- match.arg(
+    tuning.args$cv.method,
+    c("standard", "rolling")
+  )
 
   yy = as.vector(xx[n:(var.order + 1),])
   xxs = NULL
@@ -810,7 +817,27 @@ fnets.glmnet = function(xx,
   }
 
   if(is.null(lambda)){
-    glmnf = glmnet::cv.glmnet(y = yy, x = xxs, intercept = FALSE, standardize = FALSE, parallel = parallel_g)
+
+    cv.method <- match.arg(
+      tuning.args$cv.method,
+      c("standard", "rolling")
+    )
+
+    if(cv.method == "standard"){
+      glmnf = glmnet::cv.glmnet(y = yy, x = xxs, intercept = FALSE, standardize = FALSE, parallel = parallel_g)
+    } else if(cv.method == "rolling"){
+
+      cvfit <- rolling.cv.glmnet(
+        yy = yy,
+        xxs = xxs,
+        n = n,
+        p = p,
+        var.order = var.order,
+        n.blocks = tuning.args$n.blocks
+      )
+
+      glmnf <- cvfit$glmnet.fit
+    }
   } else {
     glmnf = glmnet::glmnet(y = yy, x = xxs, lambda = lambda, standardize = FALSE, parallel = parallel_g)
   }

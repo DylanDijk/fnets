@@ -113,7 +113,9 @@ fnets <-
            lrpc.adaptive = FALSE,
            tuning.args = list(
              tuning = c("cv", "bic"),
-             n.folds = 1,
+             cv.method = c("standard", "rolling"),
+             n.folds = 10,
+             n.blocks = 5,
              penalty = NULL,
              path.length = 10
            ),

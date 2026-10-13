@@ -113,3 +113,163 @@ posint <- function(x, min.x = 1){
   }
   return(x)
 }
+
+
+
+
+#' @title Rolling cross-validation for glmnet VAR estimation
+#'
+#' @description
+#' Selects the glmnet regularisation parameter using an expanding-window
+#' rolling cross-validation scheme that preserves temporal ordering.
+#'
+#' The observations are first divided into consecutive blocks according to
+#' their original time indices. The first block is used as the initial
+#' training sample. For each subsequent block, all earlier blocks are used
+#' for training and the current block is used for validation.
+#'
+#' Importantly, all p response coordinates corresponding to the same time
+#' point are assigned to the same training or validation set.
+#'
+#' @param yy Vectorised response used by glmnet. For a VAR(d), this is ordered
+#'   by response coordinate, with time running backwards within each coordinate:
+#'   x_{1,n}, ..., x_{1,d+1}, x_{2,n}, ..., x_{2,d+1}, ..., x_{p,n}, ..., x_{p,d+1}.
+#'
+#' @param xxs Sparse design matrix corresponding to yy.
+#'
+#' @param n Number of time observations in the original time series.
+#'
+#' @param p Number of component series.
+#'
+#' @param var.order VAR order d.
+#'
+#' @param n.blocks Number of consecutive time blocks used for rolling
+#'   cross-validation. Since the first block is used only for initial training,
+#'   n.blocks gives n.blocks - 1 validation steps.
+#'
+#' @return A list containing:
+#' \itemize{
+#'   \item \code{lambda.min}: lambda minimising the rolling CV error;
+#'   \item \code{lambda}: common lambda path considered;
+#'   \item \code{cvm}: mean validation error for each lambda;
+#'   \item \code{glmnet.fit}: glmnet fit to the full dataset;
+#'   \item \code{blocks}: time indices belonging to each CV block.
+#' }
+#'
+#' @keywords internal
+rolling.cv.glmnet <- function(yy,
+                              xxs,
+                              n,
+                              p,
+                              var.order,
+                              n.blocks = 5) {
+
+  n.time <- n - var.order
+
+  if(n.blocks < 2)
+    stop("n.blocks must be at least 2.")
+
+  if(n.blocks > n.time)
+    stop("n.blocks cannot exceed the number of usable time points.")
+
+
+  ## Full-data fit gives the common lambda path
+  full.fit <- glmnet::glmnet(
+    y = yy,
+    x = xxs,
+    intercept = FALSE,
+    standardize = FALSE
+  )
+
+  lambda.path <- full.fit$lambda
+
+
+  ## Consecutive blocks defined according to time
+  times <- (var.order + 1):n
+
+  block.id <- cut(
+    seq_along(times),
+    breaks = n.blocks,
+    labels = FALSE
+  )
+
+  blocks <- split(times, block.id)
+
+
+  ## Map time indices to rows in the vectorised glmnet regression
+  get.rows <- function(tt) {
+
+    unlist(
+      lapply(seq_len(p), function(j) {
+        (j - 1) * n.time + (n - tt + 1)
+      }),
+      use.names = FALSE
+    )
+  }
+
+
+  cv.sse <- rep(0, length(lambda.path))
+  n.validation <- 0
+
+
+  ## Expanding-window CV
+  for(k in 2:n.blocks) {
+
+    train.times <- unlist(blocks[1:(k - 1)])
+    test.times <- blocks[[k]]
+
+    train.rows <- get.rows(train.times)
+    test.rows <- get.rows(test.times)
+
+
+    fit.k <- glmnet::glmnet(
+      y = yy[train.rows],
+      x = xxs[train.rows, , drop = FALSE],
+      lambda = lambda.path,
+      intercept = FALSE,
+      standardize = FALSE
+    )
+
+
+    pred.k <- predict(
+      fit.k,
+      newx = xxs[test.rows, , drop = FALSE],
+      s = lambda.path,
+      type = "response"
+    )
+
+    pred.k <- as.matrix(pred.k)
+
+
+    err.k <- sweep(
+      pred.k,
+      MARGIN = 1,
+      STATS = yy[test.rows],
+      FUN = "-"
+    )
+
+    cv.sse <- cv.sse + colSums(err.k^2)
+
+    n.validation <- n.validation + length(test.rows)
+  }
+
+
+  cv.error <- cv.sse / n.validation
+
+  lambda.min <- lambda.path[which.min(cv.error)]
+
+
+  list(
+    lambda.min = lambda.min,
+    lambda = lambda.path,
+    cvm = cv.error,
+    glmnet.fit = full.fit,
+    blocks = blocks
+  )
+}
+
+
+
+
+
+
