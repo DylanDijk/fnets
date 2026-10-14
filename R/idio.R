@@ -824,7 +824,9 @@ fnets.glmnet = function(xx,
     )
 
     if(cv.method == "standard"){
-      glmnf = glmnet::cv.glmnet(y = yy, x = xxs, intercept = FALSE, standardize = FALSE, parallel = parallel_g)
+      cvfit = glmnet::cv.glmnet(y = yy, x = xxs, intercept = FALSE, standardize = FALSE, parallel = parallel_g)
+      lambda.min <- cvfit$lambda.min
+      glmnf <- cvfit$glmnet.fit
     } else if(cv.method == "rolling"){
 
       cvfit <- rolling.cv.glmnet(
@@ -836,9 +838,11 @@ fnets.glmnet = function(xx,
         n.blocks = tuning.args$n.blocks
       )
 
+      lambda.min = cvfit$lambda.min
       glmnf <- cvfit$glmnet.fit
     }
   } else {
+    lambda.min = lambda
     glmnf = glmnet::glmnet(y = yy, x = xxs, lambda = lambda, standardize = FALSE, parallel = parallel_g)
   }
 
@@ -846,9 +850,9 @@ fnets.glmnet = function(xx,
     parallel::stopCluster(cl)
   }
 
-    out <- list(beta = t(matrix(glmnet::coef.glmnet(glmnf, s = glmnf$lambda.min)[-1], nrow = p, ncol = p*var.order, byrow = TRUE)),
+    out <- list(beta = t(matrix(glmnet::coef.glmnet(glmnf, s = lambda.min)[-1], nrow = p, ncol = p*var.order, byrow = TRUE)),
               Gamma = NULL,
-              lambda = glmnf$lambda.min)
+              lambda = lambda.min)
 }
 
 
